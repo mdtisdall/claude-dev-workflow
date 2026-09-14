@@ -28,9 +28,24 @@ claude plugin install dev-workflow@claude-dev-workflow
 
 In an interactive session, you can use `/plugin marketplace add
 ~/dev/claude-dev-workflow` and `/plugin install
-dev-workflow@claude-dev-workflow`. If a change to the plugin does not show,
-run `/plugin marketplace update claude-dev-workflow`, then `/reload-plugins`
-or restart the session.
+dev-workflow@claude-dev-workflow`.
+
+The installed plugin is a copy. To get a newer version, update the
+marketplace, then the plugin, then run `/reload-plugins` or restart the
+session:
+
+```bash
+claude plugin marketplace update claude-dev-workflow
+```
+
+```bash
+claude plugin update dev-workflow@claude-dev-workflow
+```
+
+`claude plugin update` compares only the `version` in
+`.claude-plugin/plugin.json`: a change without a version bump is not
+installed. Reinstall (`claude plugin uninstall`, then `claude plugin install`)
+to copy the current files at the same version.
 
 ## Skills
 
