@@ -9,8 +9,10 @@ change:
   only that one repository, and it is validated against the permissions that
   the project declares.
 - Tools come from a Nix devShell. `gh` runs through direnv. `git` uses SSH.
-- Several tasks can run at the same time, each in its own worktree. In one
-  task, sub-agents work on different files.
+- Several tasks can run at the same time, each in its own worktree in the
+  project's git-ignored `.worktrees/` directory. Worktrees are never made
+  outside the project directory. In one task, sub-agents work on different
+  files.
 
 This repository is also a marketplace with this one plugin.
 
@@ -37,9 +39,9 @@ description.
 
 | Skill | Use |
 |---|---|
-| `project-setup` | Bring a repository onto the workflow: token first, then `.envrc`, `.gitignore`, `gh` in the flake, the hook, the permissions manifest, `scripts/check`, and `CLAUDE.md`, all through a PR. |
+| `project-setup` | Bring a repository onto the workflow: token first, then `.envrc`, `.gitignore`, `gh` in the flake, the hook, the permissions manifest, `scripts/check`, and `CLAUDE.md`, all through a PR. Also updating a project after the templates change. |
 | `github-token` | Create, store, and validate the project's own fine-grained token. |
-| `start-task` | Make a `<type>/<name>` branch in a new worktree from `origin/<default>`. |
+| `start-task` | Make a `<type>/<name>` branch in a new worktree, `.worktrees/<name>`, from `origin/<default>`. |
 | `ship` | Scope check, all checks, commit approval, push, PR, CI result. |
 | `finish-task` | After an explicit instruction: merge, verify, remove the worktree and branches. Also rebasing a PR after a lockfile conflict. |
 | `parallel-agents` | File ownership, model tiers, and prompts for sub-agents; review of each diff; byte-for-byte comparison for refactors. |
@@ -80,20 +82,17 @@ repository.
 | `skills/github-token/scripts/token-url.sh` | Pre-filled token creation link |
 | `skills/github-token/scripts/store-gh-token.sh` | Store the token (the user runs it) |
 | `skills/github-token/scripts/check-gh-token.sh` | Validate the token against the manifest |
-| `skills/start-task/scripts/new-worktree.sh` | Branch and worktree, with local-file links |
+| `skills/start-task/scripts/new-worktree.sh` | Branch and worktree in `.worktrees/`, with local-file links |
 | `skills/ship/scripts/ci-status.sh` | CI result from the Actions API (`--wait` to poll) |
 | `skills/finish-task/scripts/cleanup-merged.sh` | Safe cleanup after a merge (`--dry-run`) |
-| `skills/project-setup/templates/block-main-writes.sh` | Project hook: blocks commits and pushes to the default branch |
+| `skills/project-setup/templates/block-main-writes.sh` | Project hook: blocks commits and pushes to the default branch, and worktrees outside `.worktrees/` |
 
 ## Development
 
 ```bash
-bash tests/run-tests.sh
+nix develop --command scripts/check
 ```
 
-```bash
-claude plugin validate .
-```
-
-The tests use local git fixtures and a fake `gh` (`tests/fake-bin/gh`), with
-no network.
+`scripts/check` runs the tests under `/bin/bash`, shellcheck, and
+`claude plugin validate --strict .` when a `claude` CLI is on PATH. The tests
+use local git fixtures and a fake `gh` (`tests/fake-bin/gh`), with no network.

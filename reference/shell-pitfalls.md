@@ -26,3 +26,14 @@ multi-step shell commands against this list before running them.
 - **A flake in a git repository sees only files that git tracks or has
   staged.** Run `git add` on a new file that the flake uses before you run
   `nix develop`.
+- **The worktrees are inside the main checkout, in `.worktrees/`.** Commands
+  that walk the directory tree from the main checkout, such as `grep -r`,
+  `find .`, and tools that do not read `.gitignore`, also walk every task's
+  worktree. Use `git grep` or `git ls-files`, or exclude `.worktrees`.
+  `git clean -fdx` skips the worktrees, but `git clean -ffdx` in the main
+  checkout deletes all of them.
+- **The project hook sees only the command text and the session's working
+  directory.** A `cd` inside a heredoc or a script is invisible to it, so a
+  `git commit` for a scratch repository in such a command can be blocked as a
+  commit on the default branch. Put that work in a script file in the
+  scratchpad and run the file.

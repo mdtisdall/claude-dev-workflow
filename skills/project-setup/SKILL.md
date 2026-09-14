@@ -13,9 +13,10 @@ The result:
 | `.claude/gh-token-permissions` | Permissions that this project's token needs | yes |
 | `.envrc` | `use flake`; loads `.envrc.local`; warns when `GH_TOKEN` is not set | yes |
 | `.envrc.local` | `export GH_TOKEN=...` for this repository only | **no** (git-ignored, mode 600) |
-| `.gitignore` | Ignores `.direnv/` and `.envrc.local*` | yes |
+| `.gitignore` | Ignores `.direnv/`, `.envrc.local*`, and `.worktrees/` | yes |
+| `.worktrees/<short-name>` | One worktree for each task, inside the project directory | **no** (git-ignored) |
 | `flake.nix` | The devShell supplies `gh` and the project toolchain | yes |
-| `.claude/settings.json`, `.claude/hooks/block-main-writes.sh` | Blocks Claude's commits and pushes to the default branch | yes |
+| `.claude/settings.json`, `.claude/hooks/block-main-writes.sh` | Blocks Claude's commits and pushes to the default branch, and worktrees outside `.worktrees/` | yes |
 | `scripts/check` | One command for all lint, format, type, and test checks | yes |
 | `CLAUDE.md` | The "Branch and PR workflow" section | yes |
 
@@ -49,8 +50,10 @@ resolved.
 
 3. **Make the branch.** Run
    `bash ${CLAUDE_PLUGIN_ROOT}/skills/start-task/scripts/new-worktree.sh chore/adopt-dev-workflow`.
-   The script links the `.envrc.local` from step 2. Do all the next work in the
-   worktree that the script prints.
+   The worktree is `.worktrees/adopt-dev-workflow` in the main checkout. The
+   script adds `.worktrees/` to `.git/info/exclude` until step 4 puts it in
+   `.gitignore`, and it links the `.envrc.local` from step 2. Do all the next
+   work in the worktree that the script prints.
 
 4. **Add the files** on the branch:
    - `.gitignore`: add the lines from `templates/gitignore` that are missing.
@@ -67,7 +70,9 @@ resolved.
    - `scripts/check`: start from `templates/check`. Put in the project's real
      lint, format, type-check, and test commands (read the CI configuration
      and the documentation; ask the user if they are not clear). `chmod +x` it.
-     If the project has CI, make CI run the same commands.
+     If the project has CI, make CI run the same commands. Tools that search
+     the directory tree without `.gitignore` also search `.worktrees/`: exclude
+     it.
    - `CLAUDE.md`: add `templates/claude-md-workflow.md` as a section, and
      replace each `<placeholder>`. Keep the content that is there.
 
@@ -84,3 +89,17 @@ resolved.
    stops everyone. Tell the user that they can add one on GitHub: Settings >
    Rules > Rulesets > require a pull request before merging, on the default
    branch. Do not change repository settings yourself.
+
+9. **Report the worktrees outside `.worktrees/`.** Run `git worktree list`.
+   Give the user each worktree that is not in `<main checkout>/.worktrees/`.
+   Do not move or remove one yourself: a session can be working in it. The
+   user can finish its PR first, or move it after the work is committed:
+   `git -C <main checkout> worktree move <old path> .worktrees/<short-name>`.
+
+## Update a project that already uses the workflow
+
+When the plugin's templates change, update the project on its own
+`chore/<short-name>` branch: copy `templates/block-main-writes.sh` again, add
+the missing lines from `templates/gitignore`, and merge the changes of
+`templates/claude-md-workflow.md` into `CLAUDE.md`. Then run the checks and
+ship. Step 9 applies after the merge.
