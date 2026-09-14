@@ -2,10 +2,14 @@
 # Create a branch and a worktree for one task, based on the latest origin
 # default branch.
 #
-#   bash new-worktree.sh <type>/<short-name> [<dir>]
+#   bash new-worktree.sh <type>/<short-name>
 #
 #   <type>  feature | fix | docs | chore
-#   <dir>   default: ../<repo>-<short-name>, next to the main checkout
+#
+# The worktree is always <main checkout>/.worktrees/<short-name>: inside the
+# project directory, never next to it. A `/` in the short name becomes `-`.
+# When .worktrees/ is not git-ignored, the script adds it to the repository's
+# local exclude file (.git/info/exclude).
 #
 # The script links each git-ignored path that .worktree-links lists (one path
 # on each line; default: .envrc.local) from the main checkout into the new
@@ -17,7 +21,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=../../../lib/common.sh
 . "$here/../../../lib/common.sh"
 
-[ $# -ge 1 ] && [ $# -le 2 ] || die "usage: new-worktree.sh <type>/<short-name> [<dir>]"
+[ $# -eq 1 ] || die "usage: new-worktree.sh <type>/<short-name> (the worktree is always .worktrees/<short-name> in the main checkout)"
 branch="$1"
 
 case "$branch" in
@@ -32,7 +36,7 @@ base="$(cd "$main" && default_branch)"
 
 short="${branch#*/}"
 short="$(printf '%s' "$short" | tr '/' '-')"
-dir="${2:-$(dirname "$main")/$(basename "$main")-$short}"
+dir="$main/.worktrees/$short"
 
 [ ! -e "$dir" ] || die "already exists: $dir"
 if git -C "$main" show-ref --verify --quiet "refs/heads/$branch"; then
@@ -44,6 +48,18 @@ if git -C "$main" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1
   die "the branch already exists on origin: $branch"
 fi
 
+if ! git -C "$main" check-ignore -q ".worktrees/$short"; then
+  exclude="$(git -C "$main" rev-parse --git-path info/exclude)"
+  case "$exclude" in
+    /*) ;;
+    *) exclude="$main/$exclude" ;;
+  esac
+  mkdir -p "$(dirname "$exclude")"
+  printf '.worktrees/\n' >>"$exclude"
+  echo "added .worktrees/ to $exclude (also add it to .gitignore)"
+fi
+
+mkdir -p "$main/.worktrees"
 git -C "$main" worktree add --quiet --no-track -b "$branch" "$dir" "origin/$base"
 dir="$(cd "$dir" && pwd -P)"
 

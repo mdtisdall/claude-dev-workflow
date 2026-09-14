@@ -29,6 +29,11 @@ this project:
 - Default branch: `main`. Merge method: squash.
 - Checks, before each PR (CI runs the same checks):
   `nix develop --command scripts/check`
+- Worktrees: one for each task, in `.worktrees/<short-name>` of the main
+  checkout (git-ignored), made with the `start-task` skill. Do not create a
+  worktree outside the project directory, inside another worktree, or with a
+  different tool. The hook blocks `git worktree add` and `git worktree move`
+  to any other path.
 - Dependency sync, one time in each new worktree, before sub-agents start:
   none (the project has no dependencies to install).
 - GitHub CLI: `direnv exec . gh ...`. It uses this repository's own

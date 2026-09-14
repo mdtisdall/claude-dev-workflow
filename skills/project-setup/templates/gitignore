@@ -2,3 +2,5 @@
 .direnv/
 .envrc.local
 .envrc.local.*
+# One git worktree for each task (dev-workflow start-task)
+.worktrees/

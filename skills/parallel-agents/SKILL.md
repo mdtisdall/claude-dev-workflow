@@ -71,9 +71,12 @@ not evidence.
 
 ## Refactors that must not change behavior
 
-1. **Baseline:** `git worktree add --detach ../<repo>-base origin/<default>`.
+1. **Baseline:** like every worktree, it goes in `.worktrees/` of the main
+   checkout:
+   `git -C <main checkout> worktree add --detach .worktrees/base origin/<default>`.
    You can use the same baseline for several refactor tasks. To refresh it
-   after a fetch: `git -C ../<repo>-base checkout --detach origin/<default>`.
+   after a fetch:
+   `git -C <main checkout>/.worktrees/base checkout --detach origin/<default>`.
    Sync its dependencies one time.
 2. Run the same commands, with the same inputs, in the baseline and in the
    task worktree. Write the outputs to two different directories.
@@ -82,4 +85,4 @@ not evidence.
 4. If the inputs are sensitive (real data, patient data, credentials), report
    only counts, file names, and column names. Do not report values.
 5. When no more refactors need the baseline, remove it:
-   `git worktree remove ../<repo>-base`.
+   `git -C <main checkout> worktree remove .worktrees/base`.

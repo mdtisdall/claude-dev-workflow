@@ -64,13 +64,15 @@ in_dir() {
   (cd "$d" && "$@")
 }
 quiet() { "$@" >/dev/null 2>&1; }
+# clean_checkout DIR: git status shows nothing in DIR.
+clean_checkout() { [ -z "$(git -C "$1" status --porcelain)" ]; }
 
 # make_repo NAME: $tmp/NAME (main pushed) with the bare origin $tmp/NAME-origin.git.
 make_repo() {
   local d="$tmp/$1"
   quiet git init --bare -b main "$d-origin.git"
   quiet git init -b main "$d"
-  printf '.envrc.local\n.envrc.local.*\n' >"$d/.gitignore"
+  printf '.envrc.local\n.envrc.local.*\n.worktrees/\n' >"$d/.gitignore"
   echo readme >"$d/README.md"
   git -C "$d" add .gitignore README.md
   quiet git -C "$d" commit -m init
@@ -93,8 +95,9 @@ section "block-main-writes.sh (hook)"
 hook="$root/skills/project-setup/templates/block-main-writes.sh"
 make_repo hook
 M="$tmp/hook"
-F="$tmp/hook-x"
+F="$M/.worktrees/x"
 quiet git -C "$M" worktree add -b feature/x "$F" origin/main
+ln -s "$M" "$tmp/hook-link"
 
 run_hook() {
   jq -cn --arg c "$1" --arg d "$2" \
@@ -106,6 +109,7 @@ for mode in jq no-jq; do
   if [ "$mode" = no-jq ]; then export DEV_WORKFLOW_HOOK_NO_JQ=1; fi
   expect_exit "[$mode] commit on main: blocked" 2 run_hook 'git commit -m x' "$M"
   expect_out "[$mode] the block message names the branch" 'on `main`'
+  expect_out "[$mode] the block message starts a branch in .worktrees/" "git -C $M worktree add -b <type>/<name> .worktrees/<name>"
   expect_exit "[$mode] commit on a feature branch: allowed" 0 run_hook 'git commit -m x' "$F"
   expect_exit "[$mode] commit with an escaped-quote message on main: blocked" 2 run_hook 'git commit -m "fix: \"quoted\""' "$M"
   expect_exit "[$mode] commit with an escaped-quote message on a branch: allowed" 0 run_hook 'git commit -m "fix: \"quoted\""' "$F"
@@ -124,6 +128,22 @@ for mode in jq no-jq; do
   expect_exit "[$mode] push a branch, then commit on main: blocked" 2 run_hook 'git push origin feature/x; git commit -m y' "$M"
   expect_exit "[$mode] git log on main: allowed" 0 run_hook 'git log --oneline -5' "$M"
   expect_exit "[$mode] a command that is not git: allowed" 0 run_hook 'ls -la' "$M"
+
+  expect_exit "[$mode] worktree add in .worktrees/: allowed" 0 run_hook 'git worktree add -b feature/y .worktrees/y origin/main' "$M"
+  expect_exit "[$mode] worktree add next to the main checkout: blocked" 2 run_hook 'git worktree add -b feature/y ../hook-y origin/main' "$M"
+  expect_out "[$mode] the worktree block message names .worktrees/" "directly in $M/.worktrees/"
+  expect_exit "[$mode] worktree add to an absolute path outside: blocked" 2 run_hook "git worktree add --detach $tmp/elsewhere" "$M"
+  expect_exit "[$mode] worktree add out of .worktrees/ with ..: blocked" 2 run_hook 'git worktree add -b feature/y .worktrees/../../hook-y' "$M"
+  expect_exit "[$mode] worktree add to .worktrees itself: blocked" 2 run_hook 'git worktree add --detach .worktrees' "$M"
+  expect_exit "[$mode] worktree add inside another worktree: blocked" 2 run_hook 'git worktree add -b feature/y .worktrees/y origin/main' "$F"
+  expect_exit "[$mode] from a worktree, worktree add ../y (in .worktrees/): allowed" 0 run_hook 'git worktree add -b feature/y ../y origin/main' "$F"
+  expect_exit "[$mode] from a worktree, absolute path in .worktrees/: allowed" 0 run_hook "git worktree add -B feature/y $M/.worktrees/y" "$F"
+  expect_exit "[$mode] git -C <main checkout> worktree add .worktrees/y: allowed" 0 run_hook "git -C $M worktree add --detach .worktrees/y" "$F"
+  expect_exit "[$mode] cd into a worktree, then worktree add out of the project: blocked" 2 run_hook "cd $F && git worktree add ../../../hook-y" "$M"
+  expect_exit "[$mode] main checkout through a symbolic link, worktree add in .worktrees/: allowed" 0 run_hook 'git worktree add --detach .worktrees/y' "$tmp/hook-link"
+  expect_exit "[$mode] worktree move out of .worktrees/: blocked" 2 run_hook "git worktree move $F ../hook-moved" "$M"
+  expect_exit "[$mode] worktree move in .worktrees/: allowed" 0 run_hook "git worktree move $F .worktrees/moved" "$M"
+  expect_exit "[$mode] worktree list and remove: allowed" 0 run_hook "git worktree list && git worktree remove $F" "$M"
 done
 unset DEV_WORKFLOW_HOOK_NO_JQ
 
@@ -137,16 +157,20 @@ printf 'export GH_TOKEN="github_pat_x"\n' >"$W/.envrc.local"
 
 expect_exit "rejects a branch with no type" 1 in_dir "$W" bash "$nw" add-thing
 expect_exit "rejects an unknown type" 1 in_dir "$W" bash "$nw" feat/add-thing
+expect_exit "rejects a directory argument" 1 in_dir "$W" bash "$nw" feature/elsewhere "$tmp/elsewhere"
+expect_true "makes nothing when it rejects a directory" test ! -e "$tmp/elsewhere"
 expect_exit "creates a worktree" 0 in_dir "$W" bash "$nw" feature/add-thing
-expect_true "the worktree is next to the main checkout" test -d "$tmp/wt-add-thing"
+expect_true "the worktree is in the main checkout's .worktrees/" test -d "$W/.worktrees/add-thing"
+expect_true "the main checkout stays clean" clean_checkout "$W"
 expect_true "the branch is checked out" \
-  bash -c "[ \"\$(git -C '$tmp/wt-add-thing' rev-parse --abbrev-ref HEAD)\" = feature/add-thing ]"
+  bash -c "[ \"\$(git -C '$W/.worktrees/add-thing' rev-parse --abbrev-ref HEAD)\" = feature/add-thing ]"
 expect_true "the branch has no upstream yet" \
-  bash -c "! git -C '$tmp/wt-add-thing' rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1"
+  bash -c "! git -C '$W/.worktrees/add-thing' rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1"
 expect_true ".envrc.local is a link to the main checkout's file" \
-  bash -c "[ -L '$tmp/wt-add-thing/.envrc.local' ] && [ \"\$(readlink '$tmp/wt-add-thing/.envrc.local')\" = '$W/.envrc.local' ]"
-expect_exit "from a worktree, creates a worktree" 0 in_dir "$tmp/wt-add-thing" bash "$nw" fix/other-thing
-expect_true "that worktree is also next to the main checkout" test -d "$tmp/wt-other-thing"
+  bash -c "[ -L '$W/.worktrees/add-thing/.envrc.local' ] && [ \"\$(readlink '$W/.worktrees/add-thing/.envrc.local')\" = '$W/.envrc.local' ]"
+expect_exit "from a worktree, creates a worktree" 0 in_dir "$W/.worktrees/add-thing" bash "$nw" fix/other-thing
+expect_true "that worktree is also in the main checkout's .worktrees/" test -d "$W/.worktrees/other-thing"
+expect_true "no .worktrees/ is made inside the first worktree" test ! -e "$W/.worktrees/add-thing/.worktrees"
 expect_exit "refuses a branch that exists" 1 in_dir "$W" bash "$nw" feature/add-thing
 quiet git -C "$W" push origin "origin/main:refs/heads/chore/remote-only"
 expect_exit "refuses a branch that exists only on origin" 1 in_dir "$W" bash "$nw" chore/remote-only
@@ -154,8 +178,17 @@ expect_out "the refusal names origin" "already exists on origin"
 printf 'README.md\n.envrc.local\n' >"$W/.worktree-links"
 expect_exit "creates a worktree with .worktree-links" 0 in_dir "$W" bash "$nw" docs/links
 expect_out "does not link a tracked path" "not linked (not git-ignored): README.md"
-expect_true "the tracked path is not a link" test ! -L "$tmp/wt-links/README.md"
-expect_true "the ignored path is a link" test -L "$tmp/wt-links/.envrc.local"
+expect_true "the tracked path is not a link" test ! -L "$W/.worktrees/links/README.md"
+expect_true "the ignored path is a link" test -L "$W/.worktrees/links/.envrc.local"
+
+make_repo wt2
+printf '.envrc.local\n' >"$tmp/wt2/.gitignore"
+quiet git -C "$tmp/wt2" commit -am "do not ignore .worktrees/"
+quiet git -C "$tmp/wt2" push origin main
+expect_exit "creates a worktree when .worktrees/ is not git-ignored" 0 in_dir "$tmp/wt2" bash "$nw" feature/x
+expect_out "reports the exclude entry" "added .worktrees/ to"
+expect_true "adds .worktrees/ to .git/info/exclude" grep -qx '.worktrees/' "$tmp/wt2/.git/info/exclude"
+expect_true "that main checkout stays clean" clean_checkout "$tmp/wt2"
 
 # -----------------------------------------------------------------------------
 section "store-gh-token.sh"
@@ -174,10 +207,10 @@ expect_true "replaces the old GH_TOKEN line" \
   bash -c "grep -q 'GH_TOKEN=\"github_pat_new\"' '$S/.envrc.local' && ! grep -q github_pat_old '$S/.envrc.local'"
 expect_true "keeps the other lines" grep -q 'OTHER=1' "$S/.envrc.local"
 expect_true "writes mode 600" bash -c "[ \"\$1\" = 600 ]" _ "$(mode_of "$S/.envrc.local")"
-quiet git -C "$S" worktree add -b feature/s "$tmp/store-wt" origin/main
-expect_exit "from a worktree, stores the token" 0 store "$tmp/store-wt" github_pat_fromwt
+quiet git -C "$S" worktree add -b feature/s "$S/.worktrees/s" origin/main
+expect_exit "from a worktree, stores the token" 0 store "$S/.worktrees/s" github_pat_fromwt
 expect_true "the main checkout's file has the token" grep -q github_pat_fromwt "$S/.envrc.local"
-expect_true "no file is written in the worktree" test ! -e "$tmp/store-wt/.envrc.local"
+expect_true "no file is written in the worktree" test ! -e "$S/.worktrees/s/.envrc.local"
 make_repo store2
 : >"$tmp/store2/.gitignore"
 expect_exit "refuses when .envrc.local is not git-ignored" 1 store "$tmp/store2" github_pat_new
@@ -292,12 +325,13 @@ section "cleanup-merged.sh"
 cm="$root/skills/finish-task/scripts/cleanup-merged.sh"
 make_repo cl
 C="$tmp/cl"
-quiet git -C "$C" worktree add -b feature/done "$tmp/cl-done" origin/main
-echo change >"$tmp/cl-done/file.txt"
-git -C "$tmp/cl-done" add file.txt
-quiet git -C "$tmp/cl-done" commit -m change
-quiet git -C "$tmp/cl-done" push -u origin feature/done
-head="$(git -C "$tmp/cl-done" rev-parse HEAD)"
+D="$C/.worktrees/done"
+quiet git -C "$C" worktree add -b feature/done "$D" origin/main
+echo change >"$D/file.txt"
+git -C "$D" add file.txt
+quiet git -C "$D" commit -m change
+quiet git -C "$D" push -u origin feature/done
+head="$(git -C "$D" rev-parse HEAD)"
 # The squash merge on "GitHub": a different clone pushes the squashed commit.
 quiet git clone -b main "$C-origin.git" "$tmp/cl-gh"
 quiet git -C "$tmp/cl-gh" merge --squash origin/feature/done
@@ -317,22 +351,23 @@ pr_json MERGED "$(git -C "$C" rev-parse main)"
 expect_exit "refuses when the local branch is not the PR head" 1 cleanup 7
 expect_out "explains the local commits" "commits that are not in the PR"
 pr_json MERGED "$head"
-touch "$tmp/cl-done/stray.txt"
+touch "$D/stray.txt"
 expect_exit "refuses a worktree with an untracked file" 1 cleanup 7
 expect_out "names the untracked file" "stray.txt"
-rm "$tmp/cl-done/stray.txt"
+rm "$D/stray.txt"
 expect_exit "dry run" 0 cleanup 7 --dry-run
 expect_out "verifies the merge contents" "verified: each file"
 expect_out "dry run changes nothing" "dry run: nothing changed"
-expect_true "dry run keeps the worktree" test -d "$tmp/cl-done"
+expect_true "dry run keeps the worktree" test -d "$D"
 expect_exit "cleanup" 0 cleanup 7
-expect_true "the worktree is removed" test ! -e "$tmp/cl-done"
+expect_true "the worktree is removed" test ! -e "$D"
 expect_true "the local branch is deleted" \
   bash -c "! git -C '$C' show-ref --verify --quiet refs/heads/feature/done"
 expect_true "the remote branch is deleted" \
   bash -c "[ -z \"\$(git -C '$C' ls-remote --heads origin feature/done)\" ]"
 expect_true "main is fast-forwarded to the merge commit" \
   bash -c "[ \"\$(git -C '$C' rev-parse main)\" = '$merge' ]"
+expect_true "the main checkout stays clean" clean_checkout "$C"
 
 # -----------------------------------------------------------------------------
 printf '\n%d passed, %d failed\n' "$passed" "$failed"

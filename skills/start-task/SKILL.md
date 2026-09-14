@@ -23,13 +23,16 @@ a different task for it.
 2. **Create the worktree.** Run this from any checkout of the repository:
 
    ```
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/start-task/scripts/new-worktree.sh <type>/<short-name> [<dir>]
+   bash ${CLAUDE_PLUGIN_ROOT}/skills/start-task/scripts/new-worktree.sh <type>/<short-name>
    ```
 
    The script:
    - fetches `origin`;
-   - creates the branch from `origin/<default>`, in `../<repo>-<short-name>`
-     next to the main checkout (or in `<dir>`);
+   - creates the branch from `origin/<default>`, in
+     `<main checkout>/.worktrees/<short-name>`. The location is fixed: the
+     script has no directory argument;
+   - adds `.worktrees/` to `.git/info/exclude` when the project does not
+     git-ignore it yet;
    - links the git-ignored local files that `.worktree-links` lists from the
      main checkout (default: `.envrc.local`, the project token);
    - runs `direnv allow` in the new worktree.
@@ -53,6 +56,11 @@ a different task for it.
 
 ## Rules
 
+- Every worktree of the project is directly in `<main checkout>/.worktrees/`.
+  Do not create a worktree outside the project directory or inside another
+  worktree, and do not use a different worktree tool: other tools choose their
+  own location and do not link `.envrc.local`. The project hook blocks
+  `git worktree add` and `git worktree move` to any other path.
 - Do not run `git checkout <default>` or `git switch <default>` in a worktree.
   The default branch can be checked out in a different worktree or session.
   Base new work on `origin/<default>`.
