@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Test double for GNU coreutils stat, as found in a Nix devShell on macOS.
+# -c FORMAT supports only %a. -f means "file system status": like GNU stat, it
+# prints file-system details for each operand and fails when an operand (such
+# as a BSD format string) does not exist. That is the trap for scripts that
+# try BSD `stat -f '%Lp'` first.
+set -uo pipefail
+
+format=""
+fs=0
+files=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -L) ;;
+    -c)
+      format="$2"
+      shift
+      ;;
+    -f) fs=1 ;;
+    *) files="$files $1" ;;
+  esac
+  shift
+done
+
+status=0
+for f in $files; do
+  if [ ! -e "$f" ]; then
+    echo "stat: cannot read file system information for '$f': No such file or directory" >&2
+    status=1
+  elif [ "$fs" -eq 1 ]; then
+    printf '  File: "%s"\n    ID: 0 Namelen: ?       Type: apfs\n' "$f"
+  elif [ "$format" = '%a' ]; then
+    /usr/bin/stat -L -f '%Lp' "$f"
+  else
+    echo "fake GNU stat: unsupported arguments" >&2
+    exit 64
+  fi
+done
+exit "$status"

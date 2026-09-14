@@ -1,0 +1,4 @@
+# direnv, and this project's GitHub token (dev-workflow)
+.direnv/
+.envrc.local
+.envrc.local.*

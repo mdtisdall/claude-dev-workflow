@@ -1,0 +1,8 @@
+{
+  "name": "dev-workflow",
+  "description": "Branch-per-change workflow: a per-project GitHub fine-grained token validated against declared permissions, git worktrees for parallel work, nix develop checks, PRs through gh, and approval-gated merge and cleanup.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Dylan Tisdall"
+  }
+}

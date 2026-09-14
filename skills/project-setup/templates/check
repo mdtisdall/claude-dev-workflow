@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# All the checks that CI runs, in one command. Run it in the devShell:
+#
+#   nix develop --command scripts/check
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Replace these lines with this project's lint, format, type-check, and test
+# commands. Example for a Python project managed with uv:
+#
+#   uv sync --frozen
+#   uv run ruff check .
+#   uv run ruff format --check .
+#   uv run mypy src
+#   uv run pytest -q
+
+echo "scripts/check: no checks configured yet" >&2
+exit 1

@@ -1,0 +1,14 @@
+{
+  "name": "claude-dev-workflow",
+  "description": "Personal marketplace for the dev-workflow plugin.",
+  "owner": {
+    "name": "Dylan Tisdall"
+  },
+  "plugins": [
+    {
+      "name": "dev-workflow",
+      "source": "./",
+      "description": "Branch-per-change workflow with per-project GitHub tokens, git worktrees, nix develop, and gh."
+    }
+  ]
+}

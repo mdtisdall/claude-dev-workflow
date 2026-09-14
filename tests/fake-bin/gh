@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Test double for gh. It supports only the calls that the plugin scripts make:
+#
+#   gh api [--include|-i] [--method|-X METHOD] PATH [--input -] [--jq|-q FILTER]
+#   gh pr view [PR] --json FIELDS [--jq|-q FILTER]
+#
+# `api` answers from $FAKE_GH_RULES: tab-separated lines, first match wins:
+#
+#   METHOD  PATH-WITHOUT-QUERY  STATUS  ACCEPTED-PERMISSIONS  EXTRA-HEADER  BODY-FILE
+#
+# A request with no matching rule gets 404. `pr view` prints $FAKE_GH_PR_JSON
+# through the filter. When $FAKE_GH_LOG is set, each call is added to it.
+set -euo pipefail
+
+[ -z "${FAKE_GH_LOG:-}" ] || printf '%s\n' "$*" >>"$FAKE_GH_LOG"
+
+sub="${1:-}"
+[ $# -eq 0 ] || shift
+filter=""
+
+case "$sub" in
+  api)
+    include=0
+    method=GET
+    path=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -i | --include) include=1 ;;
+        -X | --method)
+          method="$2"
+          shift
+          ;;
+        --input)
+          cat >/dev/null
+          shift
+          ;;
+        -q | --jq)
+          filter="$2"
+          shift
+          ;;
+        -*) ;;
+        *) path="$1" ;;
+      esac
+      shift
+    done
+
+    status=404
+    accepted=""
+    extra=""
+    body_file=""
+    line="$(awk -F'\t' -v m="$method" -v p="${path%%\?*}" \
+      '$1 == m && $2 == p { print; exit }' "${FAKE_GH_RULES:-/dev/null}")"
+    if [ -n "$line" ]; then
+      status="$(printf '%s\n' "$line" | cut -f3)"
+      accepted="$(printf '%s\n' "$line" | cut -f4)"
+      extra="$(printf '%s\n' "$line" | cut -f5)"
+      body_file="$(printf '%s\n' "$line" | cut -f6)"
+    fi
+
+    if [ -n "$body_file" ]; then
+      body="$(cat "$body_file")"
+    elif [ "$status" -ge 400 ]; then
+      body="{\"message\":\"fake HTTP $status\",\"status\":\"$status\"}"
+    else
+      body='{}'
+    fi
+
+    if [ "$include" -eq 1 ]; then
+      printf 'HTTP/2.0 %s Fake\n' "$status"
+      [ -z "$accepted" ] || printf 'X-Accepted-Github-Permissions: %s\n' "$accepted"
+      [ -z "$extra" ] || printf '%s\n' "$extra"
+      printf '\n%s\n' "$body"
+    elif [ "$status" -lt 400 ]; then
+      if [ -n "$filter" ]; then
+        printf '%s' "$body" | jq -r "$filter"
+      else
+        printf '%s\n' "$body"
+      fi
+    fi
+    if [ "$status" -ge 400 ]; then
+      echo "gh: fake HTTP $status" >&2
+      exit 1
+    fi
+    ;;
+  pr)
+    if [ "${1:-}" != view ]; then
+      echo "fake gh: unsupported: pr $*" >&2
+      exit 64
+    fi
+    shift
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --json) shift ;;
+        -q | --jq)
+          filter="$2"
+          shift
+          ;;
+      esac
+      shift
+    done
+    if [ -z "${FAKE_GH_PR_JSON:-}" ]; then
+      echo "no pull requests found" >&2
+      exit 1
+    fi
+    if [ -n "$filter" ]; then
+      jq -r "$filter" "$FAKE_GH_PR_JSON"
+    else
+      cat "$FAKE_GH_PR_JSON"
+    fi
+    ;;
+  *)
+    echo "fake gh: unsupported: $sub $*" >&2
+    exit 64
+    ;;
+esac
