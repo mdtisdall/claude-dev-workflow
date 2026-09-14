@@ -36,6 +36,9 @@ In the steps, `S` is `${CLAUDE_PLUGIN_ROOT}/skills/github-token/scripts`.
    Adding the file to the repository is a tracked change, so it goes through a
    branch and PR (see the `project-setup` skill). Show the list to the user
    and confirm that it covers what the project needs, and nothing more.
+   Do not add a Checks permission: fine-grained tokens do not offer one,
+   although a 403 from the Checks API names `checks=read`. CI status uses the
+   Actions API (`actions=read`).
 
 2. **The user creates the token.** Run `bash $S/token-url.sh` from the
    repository. Give the user the URL and the checklist that the script prints.
@@ -70,7 +73,11 @@ In the steps, `S` is `${CLAUDE_PLUGIN_ROOT}/skills/github-token/scripts`.
    sends a POST with an empty JSON body `{}`. GitHub checks the token's
    permission before it validates the body. Thus, an allowed token gets 422
    and a refused token gets 403, and the request creates nothing. Use
-   `--read-only` to skip those POSTs.
+   `--read-only` to skip those POSTs. (Confirmed on a real repository:
+   `POST pulls` and `POST git/refs` returned 422 for a token with
+   `pull_requests=write` and `contents=write`, and `POST issues` returned 403
+   for a token without an Issues permission, with the missing permission in
+   the `X-Accepted-GitHub-Permissions` header.)
 
    | Result | Cause | Correction (by the user) |
    |---|---|---|

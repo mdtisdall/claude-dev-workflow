@@ -38,7 +38,10 @@ a different task for it.
    - runs `direnv allow` in the new worktree.
 
    If the output says `.envrc.local` was not linked, the project has no token
-   yet. Use the `github-token` skill before you use `gh`.
+   yet. Use the `github-token` skill before you use `gh`. The script links
+   only when it creates the worktree, so after the token is stored, link it
+   yourself: `ln -s <main checkout>/.envrc.local <wt>/.envrc.local`, then
+   `direnv allow <wt>`.
 
 3. **Work only in the worktree.** Use absolute paths into it, `git -C <wt>`,
    or `(cd <wt> && ...)`. A bare `cd` in one Bash call persists into later
