@@ -36,4 +36,6 @@ multi-step shell commands against this list before running them.
   directory.** A `cd` inside a heredoc or a script is invisible to it, so a
   `git commit` for a scratch repository in such a command can be blocked as a
   commit on the default branch. Put that work in a script file in the
-  scratchpad and run the file.
+  scratchpad and run the file. For the same reason, a `git commit` or
+  `git push` inside a script (`bash some-script.sh`) is not blocked. A GitHub
+  ruleset on the default branch is the real enforcement.

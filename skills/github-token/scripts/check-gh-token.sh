@@ -12,8 +12,9 @@
 # checks the token's permission before it validates the body: an allowed token
 # gets 422 (invalid body), and a refused token gets 403. The empty body cannot
 # create anything. (Confirmed 2026-09-13 on a real repository: POST pulls {}
-# returned 422 for a token with pull_requests=write, and POST issues {}
-# returned 403 for the same token, which had no issues permission.)
+# and POST git/refs {} returned 422 for a token with pull_requests=write and
+# contents=write, and POST issues {} returned 403 for the same token, which
+# had no issues permission.)
 # --read-only skips the POSTs and reports write permissions as unverified.
 #
 # The script never prints the token. Exit 0: no failures (a permission without

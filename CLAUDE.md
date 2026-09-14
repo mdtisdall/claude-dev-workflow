@@ -15,6 +15,17 @@ with that one plugin. `README.md` describes the skills and scripts.
   `claude plugin marketplace update claude-dev-workflow`, then
   `claude plugin update dev-workflow@claude-dev-workflow`, then
   `/reload-plugins` or a new session.
+- A plugin installed during a session is not available to the Skill tool in
+  that session. Start a new session.
+- `claude` may not be on PATH. The desktop app has a copy at
+  `~/Library/Application Support/Claude/claude-code/<version>/claude.app/Contents/MacOS/claude`.
+  `scripts/check` skips `claude plugin validate` without it, so run
+  `<that path> plugin validate --strict .` before a PR that changes the plugin.
+- A skill `description` is a YAML plain scalar: ` #` starts a comment and cuts
+  the description off, and `claude plugin validate` does not report it. Quote
+  a description that contains ` #`, as in `skills/finish-task/SKILL.md`.
+- Change the plugin only from this repository, not from a project that uses
+  it.
 
 ## Branch and PR workflow
 
