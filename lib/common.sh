@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for the dev-workflow scripts. Source it; do not run it.
 # Bash 3.2 compatible (macOS /bin/bash).
 

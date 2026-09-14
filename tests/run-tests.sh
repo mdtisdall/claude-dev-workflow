@@ -10,10 +10,17 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/dev-workflow-tests.XXXXXX")"
 tmp="$(cd "$tmp" && pwd -P)"
 trap 'rm -rf "$tmp"' EXIT
 
+# `bash` and `#!/usr/bin/env bash` find this link first, so each script runs
+# under the bash that runs the tests: `/bin/bash tests/run-tests.sh` tests all
+# of them with macOS bash 3.2.
+mkdir "$tmp/bash-bin"
+ln -s "$BASH" "$tmp/bash-bin/bash"
+printf 'bash %s (%s)\n' "$BASH_VERSION" "$BASH"
+
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
-export PATH="$root/tests/fake-bin:$PATH"
+export PATH="$tmp/bash-bin:$root/tests/fake-bin:$PATH"
 export DEV_WORKFLOW_SKIP_DIRENV=1
 unset GH_TOKEN FAKE_GH_RULES FAKE_GH_PR_JSON FAKE_GH_LOG DEV_WORKFLOW_HOOK_NO_JQ
 
@@ -73,6 +80,12 @@ make_repo() {
 }
 
 mode_of() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
+
+# -----------------------------------------------------------------------------
+section "test environment"
+
+expect_true "scripts run under the bash that runs the tests" \
+  bash -c '[ "$BASH_VERSION" = "$1" ]' _ "$BASH_VERSION"
 
 # -----------------------------------------------------------------------------
 section "block-main-writes.sh (hook)"

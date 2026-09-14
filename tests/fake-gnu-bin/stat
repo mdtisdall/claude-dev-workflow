@@ -30,7 +30,8 @@ for f in $files; do
   elif [ "$fs" -eq 1 ]; then
     printf '  File: "%s"\n    ID: 0 Namelen: ?       Type: apfs\n' "$f"
   elif [ "$format" = '%a' ]; then
-    /usr/bin/stat -L -f '%Lp' "$f"
+    # The real stat: GNU on Linux, BSD on macOS.
+    /usr/bin/stat -L -c '%a' "$f" 2>/dev/null || /usr/bin/stat -L -f '%Lp' "$f"
   else
     echo "fake GNU stat: unsupported arguments" >&2
     exit 64

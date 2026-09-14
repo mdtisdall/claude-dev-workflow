@@ -1,0 +1,28 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS: bash 3.2 and BSD tools. Ubuntu: GNU tools, as in a Nix devShell.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: scripts/check in the devShell
+        run: nix develop --command scripts/check
+      # The devShell puts GNU tools on PATH. Scripts also run outside it (for
+      # example from Claude's Bash tool), with the host's BSD tools.
+      - name: Tests with the host tools
+        if: runner.os == 'macOS'
+        run: /bin/bash tests/run-tests.sh

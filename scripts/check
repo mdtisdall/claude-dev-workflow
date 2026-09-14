@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# All the checks that CI runs, in one command. Run it in the devShell:
+#
+#   nix develop --command scripts/check
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Tests. On macOS, /bin/bash is bash 3.2: the oldest bash that the scripts
+# support. run-tests.sh runs every script under the bash that runs it.
+if [ -x /bin/bash ]; then
+  /bin/bash tests/run-tests.sh
+else
+  bash tests/run-tests.sh
+fi
+
+# Run shellcheck on each shell script: *.sh files, and files with a sh or bash
+# shebang. Tracked and untracked files, so that new scripts are checked
+# before they are committed. Findings of severity info and style do not fail.
+echo
+echo "# shellcheck"
+scripts=""
+for f in $(git ls-files --cached --others --exclude-standard); do
+  [ -f "$f" ] || continue
+  case "$f" in
+    *.sh) scripts="$scripts $f" ;;
+    *)
+      if head -n 1 "$f" | grep -qE '^#!.*[/ ](ba)?sh([[:space:]]|$)'; then
+        scripts="$scripts $f"
+      fi
+      ;;
+  esac
+done
+# shellcheck disable=SC2086 # the paths have no spaces
+shellcheck --severity=warning -x -P SCRIPTDIR $scripts
+echo "ok    shellcheck:$scripts"
+
+# Plugin manifest and skill validation, when a claude CLI is on PATH.
+echo
+echo "# claude plugin validate"
+if command -v claude >/dev/null 2>&1; then
+  claude plugin validate --strict .
+else
+  echo "skip  claude is not on PATH"
+fi
