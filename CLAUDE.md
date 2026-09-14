@@ -7,9 +7,14 @@ with that one plugin. `README.md` describes the skills and scripts.
   GNU tools of a Nix devShell. `reference/shell-pitfalls.md` lists the traps.
 - The tests use local git fixtures and a fake `gh`, with no network:
   `bash tests/run-tests.sh`.
-- The installed plugin is a copy. After a change is merged, update it with
-  `/plugin marketplace update claude-dev-workflow`, then `/reload-plugins` or
-  a new session.
+- The installed plugin is a copy, and `claude plugin update` compares only
+  the `version` in `.claude-plugin/plugin.json`. A PR that changes what the
+  plugin installs (skills, scripts, templates, `lib/`, `reference/`) also
+  bumps that version: minor for new or changed behavior, patch for fixes and
+  wording. After the merge, run
+  `claude plugin marketplace update claude-dev-workflow`, then
+  `claude plugin update dev-workflow@claude-dev-workflow`, then
+  `/reload-plugins` or a new session.
 
 ## Branch and PR workflow
 
