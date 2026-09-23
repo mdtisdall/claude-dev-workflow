@@ -1,6 +1,6 @@
 ---
 name: start-task
-description: Start one unit of work (feature, fix, docs, or chore) on its own branch, in its own git worktree, from the latest origin default branch, so that several tasks and Claude sessions can run in parallel. Use before you change any tracked file.
+description: Start one unit of work (feature, fix, refactor, docs, or chore) on its own branch, in its own git worktree, from the latest origin default branch, so that several tasks and Claude sessions can run in parallel. Use before you change any tracked file.
 ---
 
 # Start a task
@@ -17,8 +17,14 @@ a different task for it.
    |---|---|
    | `feature` | New behavior |
    | `fix` | Bug fix |
+   | `refactor` | A change that keeps the behavior (see the `parallel-agents` skill) |
    | `docs` | Documentation only |
    | `chore` | Tooling, configuration, CI, dev environment |
+
+   `feat/<short-name>` is an alias: the script makes the branch
+   `feature/<short-name>`. The type is only a label for the people who read
+   the branch and PR lists. It changes nothing else, so pick the closest one
+   instead of asking for a new type.
 
 2. **Create the worktree.** Run this from any checkout of the repository:
 

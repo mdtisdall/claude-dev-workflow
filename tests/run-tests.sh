@@ -156,7 +156,8 @@ W="$tmp/wt"
 printf 'export GH_TOKEN="github_pat_x"\n' >"$W/.envrc.local"
 
 expect_exit "rejects a branch with no type" 1 in_dir "$W" bash "$nw" add-thing
-expect_exit "rejects an unknown type" 1 in_dir "$W" bash "$nw" feat/add-thing
+expect_exit "rejects an unknown type" 1 in_dir "$W" bash "$nw" wip/add-thing
+expect_out "the refusal lists the types" "feature, fix, refactor, docs, or chore"
 expect_exit "rejects a directory argument" 1 in_dir "$W" bash "$nw" feature/elsewhere "$tmp/elsewhere"
 expect_true "makes nothing when it rejects a directory" test ! -e "$tmp/elsewhere"
 expect_exit "creates a worktree" 0 in_dir "$W" bash "$nw" feature/add-thing
@@ -180,6 +181,16 @@ expect_exit "creates a worktree with .worktree-links" 0 in_dir "$W" bash "$nw" d
 expect_out "does not link a tracked path" "not linked (not git-ignored): README.md"
 expect_true "the tracked path is not a link" test ! -L "$W/.worktrees/links/README.md"
 expect_true "the ignored path is a link" test -L "$W/.worktrees/links/.envrc.local"
+
+expect_exit "creates a refactor worktree" 0 in_dir "$W" bash "$nw" refactor/tidy-thing
+expect_true "the refactor branch is checked out" \
+  bash -c "[ \"\$(git -C '$W/.worktrees/tidy-thing' rev-parse --abbrev-ref HEAD)\" = refactor/tidy-thing ]"
+expect_exit "accepts feat/ as an alias for feature/" 0 in_dir "$W" bash "$nw" feat/alias-thing
+expect_out "reports the alias" "the branch is feature/alias-thing"
+expect_true "the alias makes a feature/ branch" \
+  bash -c "[ \"\$(git -C '$W/.worktrees/alias-thing' rev-parse --abbrev-ref HEAD)\" = feature/alias-thing ]"
+expect_true "no feat/ branch is made" \
+  bash -c "! git -C '$W' show-ref --verify --quiet refs/heads/feat/alias-thing"
 
 make_repo wt2
 printf '.envrc.local\n' >"$tmp/wt2/.gitignore"

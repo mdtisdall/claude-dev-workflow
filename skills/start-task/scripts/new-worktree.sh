@@ -4,7 +4,8 @@
 #
 #   bash new-worktree.sh <type>/<short-name>
 #
-#   <type>  feature | fix | docs | chore
+#   <type>  feature | fix | refactor | docs | chore
+#           feat is an alias for feature: feat/x makes the branch feature/x.
 #
 # The worktree is always <main checkout>/.worktrees/<short-name>: inside the
 # project directory, never next to it. A `/` in the short name becomes `-`.
@@ -24,9 +25,21 @@ here="$(cd "$(dirname "$0")" && pwd)"
 [ $# -eq 1 ] || die "usage: new-worktree.sh <type>/<short-name> (the worktree is always .worktrees/<short-name> in the main checkout)"
 branch="$1"
 
+# feat is the type of a Conventional Commits subject; here it names a feature
+# branch.
 case "$branch" in
-  feature/?* | fix/?* | docs/?* | chore/?*) ;;
-  *) die "the branch must be <type>/<short-name>, with type feature, fix, docs, or chore: $branch" ;;
+  feat/?*)
+    branch="feature/${branch#feat/}"
+    echo "feat/ is an alias for feature/: the branch is $branch"
+    ;;
+esac
+
+case "$branch" in
+  feature/?* | fix/?* | refactor/?* | docs/?* | chore/?*) ;;
+  *) die "the branch must be <type>/<short-name>, with type feature, fix, refactor, docs, or chore: $branch
+The type is only a label for the people who read the branch and PR lists, and
+it changes nothing else. Use the closest one: refactor for a change that keeps
+the behavior, chore for tooling, configuration, CI, and the dev environment." ;;
 esac
 git check-ref-format --branch "$branch" >/dev/null 2>&1 || die "not a valid branch name: $branch"
 
