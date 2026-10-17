@@ -200,9 +200,10 @@ expect_true "writes nothing outside a project" test ! -s "$envfile"
 LAST_OUT="$(printf '{"cwd":"%s"}' "$G" | env CLAUDE_ENV_FILE="$envfile" FAKE_DIRENV_FAIL=1 bash "$dg" 2>&1)"
 expect_true "a blocked .envrc: nothing written" test ! -s "$envfile"
 expect_out "a blocked .envrc: the notice says direnv allow" '"systemMessage": "devshell-gh: direnv exec failed in'
-mkdir -p "$tmp/direnv-only"
-ln -s "$root/tests/fake-bin/direnv" "$tmp/direnv-only/direnv"
-LAST_OUT="$(printf '{"cwd":"%s"}' "$G" | env CLAUDE_ENV_FILE="$envfile" PATH="$tmp/bash-bin:$tmp/direnv-only:/usr/bin:/bin" bash "$dg" 2>&1)"
+# A devShell PATH with only sh: no gh, whatever the host has in /usr/bin.
+mkdir -p "$tmp/sh-only"
+ln -s "$(command -v sh)" "$tmp/sh-only/sh"
+LAST_OUT="$(printf '{"cwd":"%s"}' "$G" | env CLAUDE_ENV_FILE="$envfile" FAKE_DIRENV_PATH="$tmp/sh-only" bash "$dg" 2>&1)"
 expect_out "a devShell without gh: a notice" "has no gh"
 expect_true "this repository's copy of the hook is the template" cmp -s "$dg" "$root/.claude/hooks/devshell-gh.sh"
 expect_true "this repository's copy of block-main-writes.sh is the template" cmp -s "$hook" "$root/.claude/hooks/block-main-writes.sh"

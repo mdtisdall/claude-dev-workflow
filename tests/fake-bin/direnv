@@ -4,8 +4,8 @@
 #   direnv exec DIR COMMAND...
 #
 # It runs COMMAND with $FAKE_DIRENV_BIN first on PATH (the devShell's bin
-# directory). With $FAKE_DIRENV_FAIL set, it fails as for a .envrc that is
-# not allowed.
+# directory), or with PATH=$FAKE_DIRENV_PATH when that is set. With
+# $FAKE_DIRENV_FAIL set, it fails as for a .envrc that is not allowed.
 set -euo pipefail
 
 if [ "${1:-}" != exec ] || [ $# -lt 3 ]; then
@@ -17,4 +17,7 @@ if [ -n "${FAKE_DIRENV_FAIL:-}" ]; then
   exit 1
 fi
 shift 2
+if [ -n "${FAKE_DIRENV_PATH:-}" ]; then
+  PATH="$FAKE_DIRENV_PATH" exec "$@"
+fi
 PATH="${FAKE_DIRENV_BIN:+$FAKE_DIRENV_BIN:}$PATH" exec "$@"
