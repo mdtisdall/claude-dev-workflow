@@ -17,6 +17,7 @@ The result:
 | `.worktrees/<short-name>` | One worktree for each task, inside the project directory | **no** (git-ignored) |
 | `flake.nix` | The devShell supplies `gh` and the project toolchain | yes |
 | `.claude/settings.json`, `.claude/hooks/block-main-writes.sh` | Blocks Claude's commits and pushes to the default branch, and worktrees outside `.worktrees/` | yes |
+| `.claude/hooks/devshell-gh.sh` | Makes a plain `gh` in Claude's Bash commands the devShell's `gh`, with the project token | yes |
 | `scripts/check` | One command for all lint, format, type, and test checks; `--changed-since <ref>` runs only the affected tests | yes |
 | `scripts/affected-tests` | Python projects: selects the tests that a change can affect | yes |
 | `.github/workflows/check.yml` | Python projects: CI with the affected tests on PRs, and all the tests on the default branch after each merge | yes |
@@ -66,9 +67,10 @@ resolved.
    - `.claude/gh-token-permissions`: copy
      `${CLAUDE_PLUGIN_ROOT}/skills/github-token/gh-token-permissions.default`,
      and add the permissions from step 2.
-   - `.claude/hooks/block-main-writes.sh`: copy `templates/block-main-writes.sh`
-     and `chmod +x` it. Merge `templates/settings.json` into
-     `.claude/settings.json`.
+   - `.claude/hooks/block-main-writes.sh` and `.claude/hooks/devshell-gh.sh`:
+     copy them from `templates/` and `chmod +x` them. Merge
+     `templates/settings.json` into `.claude/settings.json`: the
+     `PreToolUse` hook, and the `SessionStart` and `CwdChanged` hooks.
    - `scripts/check`: start from `templates/check`. Put in the project's real
      lint, format, type-check, and test commands (read the CI configuration
      and the documentation; ask the user if they are not clear). `chmod +x` it.
@@ -119,7 +121,8 @@ resolved.
 ## Update a project that already uses the workflow
 
 When the plugin's templates change, update the project on its own
-`chore/<short-name>` branch: copy `templates/block-main-writes.sh` again, add
+`chore/<short-name>` branch: copy `templates/block-main-writes.sh` and
+`templates/devshell-gh.sh` again, merge `templates/settings.json`, add
 the missing lines from `templates/gitignore`, and merge the changes of
 `templates/claude-md-workflow.md` into `CLAUDE.md`. In a Python project, copy
 `templates/affected-tests` again, and merge the changes of

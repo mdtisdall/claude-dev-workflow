@@ -22,7 +22,9 @@ multi-step shell commands against this list before running them.
 - **`nix develop --command` does not run direnv.** Without direnv,
   `.envrc.local` is not loaded and `GH_TOKEN` is not set, so `gh` silently
   uses the global login. Use `direnv exec . <command>` for anything that needs
-  the project's environment variables.
+  the project's environment variables. In Claude Code's Bash commands, the
+  project's `devshell-gh.sh` hook sets up `gh` and `GH_TOKEN` (not the other
+  devShell tools or variables).
 - **A flake in a git repository sees only files that git tracks or has
   staged.** Run `git add` on a new file that the flake uses before you run
   `nix develop`.
