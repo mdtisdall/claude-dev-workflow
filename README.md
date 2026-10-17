@@ -54,10 +54,10 @@ description.
 
 | Skill | Use |
 |---|---|
-| `project-setup` | Bring a repository onto the workflow: token first, then `.envrc`, `.gitignore`, `gh` in the flake, the hook, the permissions manifest, `scripts/check`, and `CLAUDE.md`, all through a PR. Also updating a project after the templates change. |
+| `project-setup` | Bring a repository onto the workflow: token first, then `.envrc`, `.gitignore`, `gh` in the flake, the hook, the permissions manifest, `scripts/check`, CI for Python projects, and `CLAUDE.md`, all through a PR. Also updating a project after the templates change. |
 | `github-token` | Create, store, and validate the project's own fine-grained token. |
-| `start-task` | Make a `<type>/<name>` branch in a new worktree, `.worktrees/<name>`, from `origin/<default>`. |
-| `ship` | Scope check, all checks, commit approval, push, PR, CI result. |
+| `start-task` | Make a `<type>/<name>` branch in a new worktree, `.worktrees/<name>`, from `origin/<default>`, and report the CI result of the default branch. |
+| `ship` | Scope check, the checks (only the affected tests when `scripts/check` supports it), commit approval, push, PR, CI result. |
 | `finish-task` | After an explicit instruction: merge, verify, remove the worktree and branches. Also rebasing a PR after a lockfile conflict. |
 | `parallel-agents` | File ownership, model tiers, and prompts for sub-agents; review of each diff; byte-for-byte comparison for refactors. |
 | `browser-check-localhost` | Check generated HTML pages in the Browser pane through a temporary localhost server. |
@@ -98,9 +98,29 @@ repository.
 | `skills/github-token/scripts/store-gh-token.sh` | Store the token (the user runs it) |
 | `skills/github-token/scripts/check-gh-token.sh` | Validate the token against the manifest |
 | `skills/start-task/scripts/new-worktree.sh` | Branch and worktree in `.worktrees/`, with local-file links |
+| `skills/start-task/scripts/main-status.sh` | CI result of the latest pushes to the default branch |
 | `skills/ship/scripts/ci-status.sh` | CI result from the Actions API (`--wait` to poll) |
 | `skills/finish-task/scripts/cleanup-merged.sh` | Safe cleanup after a merge (`--dry-run`) |
 | `skills/project-setup/templates/block-main-writes.sh` | Project hook: blocks commits and pushes to the default branch, and worktrees outside `.worktrees/` |
+| `skills/project-setup/templates/affected-tests` | Python 3.11+: the tests that a change can affect, from imports, conftest files, and the files that tests name |
+
+## CI for Python projects
+
+`templates/check.yml` and `templates/affected-tests` keep CI small for small
+changes, as each change gets its own PR:
+
+- On a PR, `affected-tests` gives each changed file a requirement, and the
+  largest one wins: all the tests (dependency files, the pytest configuration,
+  CI, and any file that matches no rule and that no module names), the test
+  files that reach a changed module through imports, conftest files, or a
+  string that names it, or nothing (docs that no test runs, and ignored
+  files). When a change has only docs, the check job does not start.
+- On the default branch, after each merge, all the tests run, one run at a
+  time. Newer merges replace the queued run. This catches what the selection
+  misses (a module loaded by a computed name, a file opened by a computed
+  path), in the next run after the merge. A failure opens an issue with the
+  label `ci-main`; `start-task` reports a red default branch.
+- The Nix store is in the GitHub Actions cache (`nix-community/cache-nix-action`).
 
 ## Development
 
@@ -108,6 +128,8 @@ repository.
 nix develop --command scripts/check
 ```
 
-`scripts/check` runs the tests under `/bin/bash`, shellcheck, and
-`claude plugin validate --strict .` when a `claude` CLI is on PATH. The tests
+`scripts/check` runs the tests under `/bin/bash`, shellcheck, actionlint on
+the workflows and `templates/check.yml`, and `claude plugin validate --strict .`
+when a `claude` CLI is on PATH. The `affected-tests` tests need Python 3.11 or
+newer (the devShell has it), and are skipped with an older `python3`. The tests
 use local git fixtures and a fake `gh` (`tests/fake-bin/gh`), with no network.

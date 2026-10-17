@@ -1,6 +1,6 @@
 ---
 name: project-setup
-description: Bring a repository onto the dev-workflow - its own GitHub fine-grained token first, then .envrc/.gitignore/flake gh, the hook that blocks commits and pushes to the default branch, the token permissions manifest, a single check command, and the workflow section of CLAUDE.md, all merged through a PR. Use when you start a new project or move an existing repository onto this workflow.
+description: Bring a repository onto the dev-workflow - its own GitHub fine-grained token first, then .envrc/.gitignore/flake gh, the hook that blocks commits and pushes to the default branch, the token permissions manifest, a single check command, CI that runs only the affected tests on PRs for Python projects, and the workflow section of CLAUDE.md, all merged through a PR. Use when you start a new project or move an existing repository onto this workflow.
 ---
 
 # Project setup
@@ -17,7 +17,9 @@ The result:
 | `.worktrees/<short-name>` | One worktree for each task, inside the project directory | **no** (git-ignored) |
 | `flake.nix` | The devShell supplies `gh` and the project toolchain | yes |
 | `.claude/settings.json`, `.claude/hooks/block-main-writes.sh` | Blocks Claude's commits and pushes to the default branch, and worktrees outside `.worktrees/` | yes |
-| `scripts/check` | One command for all lint, format, type, and test checks | yes |
+| `scripts/check` | One command for all lint, format, type, and test checks; `--changed-since <ref>` runs only the affected tests | yes |
+| `scripts/affected-tests` | Python projects: selects the tests that a change can affect | yes |
+| `.github/workflows/check.yml` | Python projects: CI with the affected tests on PRs, and all the tests on the default branch after each merge | yes |
 | `CLAUDE.md` | The "Branch and PR workflow" section | yes |
 
 ## Before you start
@@ -73,6 +75,24 @@ resolved.
      If the project has CI, make CI run the same commands. Tools that search
      the directory tree without `.gitignore` also search `.worktrees/`: exclude
      it.
+   - Python projects with pytest: copy `templates/affected-tests` to
+     `scripts/affected-tests` and `chmod +x` it. In `scripts/check`, run the
+     tests through it when `--changed-since` is given (the example in
+     `templates/check`). Run
+     `python3 scripts/affected-tests --base origin/<default> --explain` on a
+     branch with a typical change, and read the reasons. Add project files
+     that the defaults do not cover to `[tool.affected-tests]` in
+     `pyproject.toml` (the settings are at the top of the script): a data
+     file that tests read through a computed path goes in `map`, a file that
+     needs no tests goes in `ignore`. A file that matches no rule and that no
+     module names runs all the tests.
+   - Python projects with GitHub Actions: start from `templates/check.yml` for
+     `.github/workflows/check.yml`. Merge it with the CI that is there. Replace
+     `main` if the default branch has a different name. Keep the `changes`
+     job, the conditions on the `check` job, the `concurrency` block, and the
+     `report-main` job. If a branch ruleset requires status checks, require
+     `changes` and `check`: a skipped job counts as passed. Projects in other
+     languages keep one CI job that runs `scripts/check`.
    - `CLAUDE.md`: add `templates/claude-md-workflow.md` as a section, and
      replace each `<placeholder>`. Keep the content that is there.
 
@@ -101,5 +121,7 @@ resolved.
 When the plugin's templates change, update the project on its own
 `chore/<short-name>` branch: copy `templates/block-main-writes.sh` again, add
 the missing lines from `templates/gitignore`, and merge the changes of
-`templates/claude-md-workflow.md` into `CLAUDE.md`. Then run the checks and
+`templates/claude-md-workflow.md` into `CLAUDE.md`. In a Python project, copy
+`templates/affected-tests` again, and merge the changes of
+`templates/check.yml` and of the `--changed-since` part of `templates/check`. Then run the checks and
 ship. Step 9 applies after the merge.
