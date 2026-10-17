@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Test double for direnv. It supports only the call that the hooks make:
+#
+#   direnv exec DIR COMMAND...
+#
+# It runs COMMAND with $FAKE_DIRENV_BIN first on PATH (the devShell's bin
+# directory). With $FAKE_DIRENV_FAIL set, it fails as for a .envrc that is
+# not allowed.
+set -euo pipefail
+
+if [ "${1:-}" != exec ] || [ $# -lt 3 ]; then
+  echo "fake direnv: unsupported: $*" >&2
+  exit 64
+fi
+if [ -n "${FAKE_DIRENV_FAIL:-}" ]; then
+  echo "direnv: error $2/.envrc is blocked. Run \`direnv allow\` to approve its content" >&2
+  exit 1
+fi
+shift 2
+PATH="${FAKE_DIRENV_BIN:+$FAKE_DIRENV_BIN:}$PATH" exec "$@"

@@ -52,9 +52,11 @@ this project:
   to any other path.
 - Dependency sync, one time in each new worktree, before sub-agents start:
   none (the project has no dependencies to install).
-- GitHub CLI: `direnv exec . gh ...`. It uses this repository's own
-  fine-grained token in the git-ignored `.envrc.local`. The permissions that
-  the token needs are in `.claude/gh-token-permissions`. `git` uses SSH.
+- GitHub CLI: `gh ...`. In Claude Code's Bash commands, the
+  `.claude/hooks/devshell-gh.sh` hook makes `gh` the devShell's, with this
+  repository's own fine-grained token from the git-ignored `.envrc.local`.
+  Elsewhere, and if the hook reports a problem: `direnv exec . gh ...`.
+  The permissions that the token needs are in `.claude/gh-token-permissions`. `git` uses SSH.
 - CI status: the Actions API (`ci-status.sh`, `gh run list`), not
   `gh pr checks`.
 - `git commit` and `git push` to `main` are blocked for Claude

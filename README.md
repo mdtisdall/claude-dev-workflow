@@ -87,6 +87,13 @@ A project does not use a shared or global `GH_TOKEN`:
 New worktrees get a link to the main checkout's `.envrc.local`, so one token
 serves all worktrees of that project.
 
+In Claude Code, the project's `devshell-gh.sh` hook runs at the start of a
+session and at each change of directory. It puts the directory of the
+devShell's `gh` first on PATH for Claude's Bash commands, and has them source
+`.envrc.local`. A plain `gh` is then the project's, with the project token.
+Only `gh` changes: the other commands keep the host tools. Outside Claude
+Code, use `direnv exec . gh`.
+
 ## Scripts
 
 All scripts are compatible with bash 3.2 and run from inside the target
@@ -103,6 +110,7 @@ repository.
 | `skills/finish-task/scripts/cleanup-merged.sh` | Safe cleanup after a merge (`--dry-run`) |
 | `skills/project-setup/templates/block-main-writes.sh` | Project hook: blocks commits and pushes to the default branch, and worktrees outside `.worktrees/` |
 | `skills/project-setup/templates/affected-tests` | Python 3.11+: the tests that a change can affect, from imports, conftest files, and the files that tests name |
+| `skills/project-setup/templates/devshell-gh.sh` | Project hook (SessionStart, CwdChanged): a plain `gh` in Claude's Bash commands is the devShell's, with the project token |
 
 ## CI for Python projects
 

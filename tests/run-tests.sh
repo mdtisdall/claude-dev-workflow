@@ -148,6 +148,67 @@ done
 unset DEV_WORKFLOW_HOOK_NO_JQ
 
 # -----------------------------------------------------------------------------
+section "devshell-gh.sh (hook)"
+
+dg="$root/skills/project-setup/templates/devshell-gh.sh"
+make_repo dg
+G="$tmp/dg"
+mkdir -p "$G/sub" "$tmp/devshell-bin" "$tmp/host-bin" "$tmp/no-project"
+printf 'use flake\n' >"$G/.envrc"
+printf 'export GH_TOKEN="github_pat_dg"\n' >"$G/.envrc.local"
+quiet git -C "$G" worktree add -b feature/dg "$G/.worktrees/dg" origin/main
+printf 'use flake\n' >"$G/.worktrees/dg/.envrc"
+ln -s "$G/.envrc.local" "$G/.worktrees/dg/.envrc.local"
+printf '#!/bin/sh\necho devshell-gh\n' >"$tmp/devshell-bin/gh"
+printf '#!/bin/sh\necho host-gh\n' >"$tmp/host-bin/gh"
+chmod +x "$tmp/devshell-bin/gh" "$tmp/host-bin/gh"
+envfile="$tmp/claude-env"
+
+# run_dg JSON: run the hook with an empty $CLAUDE_ENV_FILE.
+run_dg() {
+  : >"$envfile"
+  printf '%s' "$1" | env CLAUDE_ENV_FILE="$envfile" FAKE_DIRENV_BIN="$tmp/devshell-bin" bash "$dg"
+}
+# in_claude_env COMMAND: run COMMAND as Claude Code runs a Bash command, after
+# the environment file, with the host gh on PATH.
+in_claude_env() {
+  env -u GH_TOKEN PATH="$tmp/host-bin:$PATH" bash -c ". '$envfile'; $1"
+}
+# expect_eq NAME GOT WANT
+expect_eq() {
+  if [ "$2" = "$3" ]; then ok "$1"; else not_ok "$1" "expected: [$3]
+got:      [$2]"; fi
+}
+
+for mode in jq no-jq; do
+  if [ "$mode" = no-jq ]; then export DEV_WORKFLOW_HOOK_NO_JQ=1; fi
+  expect_exit "[$mode] SessionStart in the main checkout" 0 run_dg "{\"hook_event_name\":\"SessionStart\",\"cwd\":\"$G\"}"
+  expect_eq "[$mode] gh is the devShell's" "$(in_claude_env gh)" devshell-gh
+  expect_eq "[$mode] GH_TOKEN comes from .envrc.local" "$(in_claude_env 'echo $GH_TOKEN')" github_pat_dg
+  expect_true "[$mode] the environment file does not contain the token" bash -c "! grep -q github_pat_dg '$envfile'"
+done
+unset DEV_WORKFLOW_HOOK_NO_JQ
+expect_eq "only gh's directory goes first on PATH" "$(head -n 1 "$envfile")" "export PATH='$tmp/devshell-bin':\"\$PATH\""
+expect_exit "CwdChanged into a subdirectory uses new_cwd" 0 run_dg "{\"hook_event_name\":\"CwdChanged\",\"cwd\":\"$tmp/no-project\",\"old_cwd\":\"$tmp\",\"new_cwd\":\"$G/sub\"}"
+expect_eq "the subdirectory gets the devShell gh" "$(in_claude_env gh)" devshell-gh
+expect_exit "CwdChanged into a worktree" 0 run_dg "{\"hook_event_name\":\"CwdChanged\",\"new_cwd\":\"$G/.worktrees/dg\"}"
+expect_true "the worktree's own .envrc.local link is sourced" grep -q "'$G/.worktrees/dg/.envrc.local'" "$envfile"
+expect_eq "the link gives the token" "$(in_claude_env 'echo $GH_TOKEN')" github_pat_dg
+expect_exit "a directory outside any project" 0 run_dg "{\"hook_event_name\":\"CwdChanged\",\"new_cwd\":\"$tmp/no-project\"}"
+expect_true "writes nothing outside a project" test ! -s "$envfile"
+: >"$envfile"
+LAST_OUT="$(printf '{"cwd":"%s"}' "$G" | env CLAUDE_ENV_FILE="$envfile" FAKE_DIRENV_FAIL=1 bash "$dg" 2>&1)"
+expect_true "a blocked .envrc: nothing written" test ! -s "$envfile"
+expect_out "a blocked .envrc: the notice says direnv allow" '"systemMessage": "devshell-gh: direnv exec failed in'
+mkdir -p "$tmp/direnv-only"
+ln -s "$root/tests/fake-bin/direnv" "$tmp/direnv-only/direnv"
+LAST_OUT="$(printf '{"cwd":"%s"}' "$G" | env CLAUDE_ENV_FILE="$envfile" PATH="$tmp/bash-bin:$tmp/direnv-only:/usr/bin:/bin" bash "$dg" 2>&1)"
+expect_out "a devShell without gh: a notice" "has no gh"
+expect_true "this repository's copy of the hook is the template" cmp -s "$dg" "$root/.claude/hooks/devshell-gh.sh"
+expect_true "this repository's copy of block-main-writes.sh is the template" cmp -s "$hook" "$root/.claude/hooks/block-main-writes.sh"
+expect_exit "no CLAUDE_ENV_FILE: does nothing" 0 bash -c "printf '{\"cwd\":\"$G\"}' | env -u CLAUDE_ENV_FILE bash '$dg'"
+
+# -----------------------------------------------------------------------------
 section "new-worktree.sh"
 
 nw="$root/skills/start-task/scripts/new-worktree.sh"
