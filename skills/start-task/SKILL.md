@@ -49,18 +49,28 @@ a different task for it.
    yourself: `ln -s <main checkout>/.envrc.local <wt>/.envrc.local`, then
    `direnv allow <wt>`.
 
-3. **Work only in the worktree.** Use absolute paths into it, `git -C <wt>`,
+3. **Check the CI of the default branch.** In the new worktree, run
+   `direnv exec . bash ${CLAUDE_PLUGIN_ROOT}/skills/start-task/scripts/main-status.sh`.
+   It reports the newest finished CI run on the default branch for each
+   workflow, and a newer run that is in progress. On a project with the
+   `check.yml` template, only the default branch runs all the tests, after
+   the merge, so a test that a PR did not select can fail there. If the
+   script reports red (exit 1), tell the user, with the run URL, and
+   continue: a red default branch does not stop new work. Do not wait for a
+   run that is in progress. Exit 2 (no runs, or no token) is not a problem.
+
+4. **Work only in the worktree.** Use absolute paths into it, `git -C <wt>`,
    or `(cd <wt> && ...)`. A bare `cd` in one Bash call persists into later
    calls (see `${CLAUDE_PLUGIN_ROOT}/reference/shell-pitfalls.md`).
 
-4. **Sync dependencies one time**, before you start sub-agents. Parallel syncs
+5. **Sync dependencies one time**, before you start sub-agents. Parallel syncs
    interfere with each other. Use the project's sync command from `CLAUDE.md`,
    for example `(cd <wt> && nix develop --command uv sync)`.
 
-5. **Get the decisions first.** If the task has open design decisions, ask the
+6. **Get the decisions first.** If the task has open design decisions, ask the
    user (AskUserQuestion) before you write code.
 
-6. **Planning documents stay on the branch.** Before the merge, move lasting
+7. **Planning documents stay on the branch.** Before the merge, move lasting
    content into the permanent documentation and delete the planning file.
 
 ## Rules

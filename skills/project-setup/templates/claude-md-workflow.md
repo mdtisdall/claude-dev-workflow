@@ -15,7 +15,11 @@ this project:
 
 - Default branch: `<default-branch>`. Merge method: squash.
 - Checks, before each PR (CI runs the same checks):
-  `nix develop --command scripts/check`
+  `nix develop --command scripts/check`. If `scripts/check` accepts
+  `--changed-since`, PRs run
+  `nix develop --command scripts/check --changed-since origin/<default-branch>`
+  (only the tests that the change can affect), and `<default-branch>` runs all
+  the tests after each merge.
 - Worktrees: one for each task, in `.worktrees/<short-name>` of the main
   checkout (git-ignored), made with the `start-task` skill. Do not create a
   worktree outside the project directory, inside another worktree, or with a

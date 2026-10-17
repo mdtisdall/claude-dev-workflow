@@ -18,9 +18,11 @@
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShellNoCC {
           packages = [
+            pkgs.actionlint
             pkgs.gh
             pkgs.git
             pkgs.jq
+            pkgs.python3
             pkgs.shellcheck
           ];
         };

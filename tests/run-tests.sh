@@ -381,5 +381,171 @@ expect_true "main is fast-forwarded to the merge commit" \
 expect_true "the main checkout stays clean" clean_checkout "$C"
 
 # -----------------------------------------------------------------------------
+section "main-status.sh"
+
+ms="$root/skills/start-task/scripts/main-status.sh"
+run_main() { printf '{"name":"%s","status":"%s","conclusion":%s,"head_sha":"%s","html_url":"https://x/%s"}' "$@"; }
+main_status() { in_dir "$T" env GH_TOKEN=github_pat_fake FAKE_GH_RULES="$tmp/ci-rules.tsv" FAKE_GH_LOG="$tmp/ms-log" bash "$ms"; }
+
+runs "$(run_main check completed '"success"' aaaaaaa1 1)"
+expect_exit "green" 0 main_status
+expect_out "reports the run" "success    check at aaaaaaa  https://x/1"
+expect_true "asks for the push runs of the default branch" grep -q 'branch=main&event=push' "$tmp/ms-log"
+runs "$(run_main check completed '"failure"' bbbbbbb2 2),$(run_main check completed '"success"' aaaaaaa1 1)"
+expect_exit "red" 1 main_status
+expect_out "names the failed run" "failure    check at bbbbbbb  https://x/2"
+expect_out "says that new work can start" "New work can start"
+runs "$(run_main check completed '"cancelled"' ccccccc3 3),$(run_main check completed '"success"' aaaaaaa1 1)"
+expect_exit "a cancelled run does not count" 0 main_status
+runs "$(run_main check in_progress null ddddddd4 4),$(run_main check completed '"failure"' bbbbbbb2 2)"
+expect_exit "red, with a newer run in progress" 1 main_status
+expect_out "reports the run in progress" "(a newer run, at ddddddd, is in progress)"
+runs "$(run_main check in_progress null ddddddd4 4)"
+expect_exit "no finished runs" 2 main_status
+expect_out "reports no finished runs" "no finished CI runs on main yet"
+expect_exit "no token: exit 2" 2 in_dir "$T" env -u GH_TOKEN FAKE_GH_RULES=/dev/null bash "$ms"
+
+# -----------------------------------------------------------------------------
+section "check template"
+
+ct="$root/skills/project-setup/templates/check"
+expect_exit "rejects an unknown option" 64 bash "$ct" --all
+expect_exit "--changed-since needs a ref" 64 bash "$ct" --changed-since
+expect_exit "says that no checks are configured" 1 bash "$ct" --changed-since origin/main
+expect_out "names the missing checks" "no checks configured yet"
+
+# -----------------------------------------------------------------------------
+section "affected-tests"
+
+at="$root/skills/project-setup/templates/affected-tests"
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  printf 'skip  python3 is older than 3.11, or missing: %s\n' "$(python3 --version 2>&1)"
+else
+  make_repo py
+  P="$tmp/py"
+  mkdir -p "$P/src/pkg" "$P/tests" "$P/docs" "$P/data" "$P/fixtures"
+  cat >"$P/pyproject.toml" <<'EOF'
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --doctest-glob=README.md"
+
+[tool.affected-tests.map]
+"fixtures/**" = ["tests/test_fixtures.py"]
+EOF
+  : >"$P/src/pkg/__init__.py"
+  printf 'from .util import helper\n' >"$P/src/pkg/core.py"
+  printf 'def helper():\n    pass\n' >"$P/src/pkg/util.py"
+  printf 'import json\n' >"$P/src/pkg/lonely.py"
+  printf 'import os\n' >"$P/src/pkg/orphan.py"
+  mkdir -p "$P/src/plug" "$P/other"
+  : >"$P/src/plug/__init__.py"
+  printf 'import importlib\n\nPATTERNS = ["*", "garbage-*"]\n\n\ndef load(n):\n    return importlib.import_module(n)\n' >"$P/src/plug/loader.py"
+  printf 'def extra():\n    pass\n' >"$P/src/plug/extra.py"
+  printf 'from plug import loader\n' >"$P/tests/test_loader.py"
+  printf 'import os\n' >"$P/other/__init__.py"
+  printf 'from pkg.core import helper\n' >"$P/tests/test_core.py"
+  printf 'from unittest import mock\n\n\n@mock.patch("pkg.lonely.json")\ndef test_x(m):\n    pass\n' >"$P/tests/test_lonely.py"
+  printf 'import pathlib\n\nDATA = pathlib.Path("data/values.json")\n' >"$P/tests/test_data.py"
+  printf 'def test_f():\n    pass\n' >"$P/tests/test_fixtures.py"
+  printf 'import pytest\n' >"$P/tests/conftest.py"
+  printf 'readme\n' >"$P/README.md"
+  printf 'guide\n' >"$P/docs/guide.md"
+  printf '{}\n' >"$P/data/values.json"
+  printf 'x\n' >"$P/data/unused.bin"
+  printf 'x\n' >"$P/fixtures/a.txt"
+  git -C "$P" add -A
+  quiet git -C "$P" commit -m "python project"
+  quiet git -C "$P" push origin main
+
+  # shellcheck disable=SC2120 # expect_exit passes the arguments
+  sel() { in_dir "$P" python3 "$at" --base origin/main "$@"; }
+  reset_py() { git -C "$P" checkout -q -- . && git -C "$P" clean -qfd; }
+  # selects NAME CHANGE-COMMAND EXPECTED-OUTPUT: the selection is exactly EXPECTED-OUTPUT.
+  selects() {
+    local name="$1" want="$3" got
+    in_dir "$P" bash -c "$2"
+    got="$(sel 2>/dev/null | tr '\n' ' ')"
+    got="${got% }"
+    if [ "$got" = "$want" ]; then ok "$name"; else not_ok "$name" "expected: [$want]
+got:      [$got]
+$(sel --explain 2>&1 >/dev/null)"; fi
+    reset_py
+  }
+
+  selects "a module: the tests that import it, through a relative import" \
+    'echo "#" >>src/pkg/util.py' "tests/test_core.py"
+  selects "a mock.patch target string is an import" \
+    'echo "#" >>src/pkg/lonely.py' "tests/test_lonely.py"
+  selects "a module that a computed-name loader in its package can load" \
+    'echo "#" >>src/plug/extra.py' "tests/test_loader.py"
+  selects "a module that no test reaches: no tests" \
+    'echo "#" >>other/__init__.py' ""
+  selects "a test file: itself" \
+    'echo "#" >>tests/test_core.py' "tests/test_core.py"
+  selects "a new, untracked test file: itself" \
+    'printf "def test_n():\n    pass\n" >tests/test_new.py' "tests/test_new.py"
+  selects "a deleted module: the tests that still import it" \
+    'git rm -q src/pkg/util.py' "tests/test_core.py"
+  quiet git -C "$P" reset -q --hard
+  selects "a doc that matches --doctest-glob: the doc itself" \
+    'echo more >>README.md' "README.md"
+  selects "a doc that no test runs: no tests" \
+    'echo more >>docs/guide.md' ""
+  selects "a data file that a test names by path" \
+    'echo "{ }" >data/values.json' "tests/test_data.py"
+  selects "a file in the map: the mapped tests" \
+    'echo y >>fixtures/a.txt' "tests/test_fixtures.py"
+  selects "an ignored file: no tests" \
+    'echo license >LICENSE' ""
+  selects "the string \"*\" in a module does not name every file" \
+    'echo y >>data/unused.bin' "ALL"
+  selects "a file that no rule matches and no module names: ALL" \
+    'echo y >>data/unused.bin' "ALL"
+  selects "pyproject.toml: ALL" \
+    'echo "# x" >>pyproject.toml' "ALL"
+  selects "the conftest.py of every test: ALL" \
+    'echo "#" >>tests/conftest.py' "ALL"
+  selects "a docs change and a module change: the tests of the module" \
+    'echo more >>docs/guide.md; echo "#" >>src/pkg/util.py' "tests/test_core.py"
+  selects "a .py file name in a module that is not a test does not name it" \
+    'printf "NAME = \"__init__.py\"\\n" >>src/pkg/core.py; git commit -qam name; git push -q origin HEAD:main; echo "#" >>other/__init__.py' ""
+  selects "a module loaded by a computed name depends on every module" \
+    'printf "import importlib\n\n\ndef load(n):\n    return importlib.import_module(n)\n" >tests/test_plugins.py; git add tests/test_plugins.py; git commit -qm plugins; git push -q origin HEAD:main; echo "#" >>src/pkg/orphan.py' \
+    "tests/test_plugins.py"
+  quiet git -C "$P" reset -q --hard origin/main
+  expect_exit "a ref that does not exist: ALL" 0 sel --base no-such-ref
+  expect_true "the output is ALL" bash -c "[ \"\$(printf '%s' \"\$1\" | tail -n 1)\" = ALL ]" _ "$LAST_OUT"
+
+  in_dir "$P" bash -c 'echo more >>docs/guide.md'
+  : >"$tmp/gh-output"
+  expect_exit "--github-output, docs only" 0 in_dir "$P" env GITHUB_OUTPUT="$tmp/gh-output" python3 "$at" --base origin/main --github-output
+  expect_true "docs only: the check job is skipped" grep -qx 'check=skip' "$tmp/gh-output"
+  expect_true "docs only: docs=true" grep -qx 'docs=true' "$tmp/gh-output"
+  expect_exit "--run with no affected tests" 0 sel --run -- sh -c 'echo RAN; exit 1'
+  expect_out "runs nothing" "no tests are affected"
+  reset_py
+  in_dir "$P" bash -c 'echo "#" >>src/pkg/util.py'
+  : >"$tmp/gh-output"
+  expect_exit "--github-output, a module" 0 in_dir "$P" env GITHUB_OUTPUT="$tmp/gh-output" python3 "$at" --base origin/main --github-output
+  expect_true "a module: the check job runs" grep -qx 'check=run' "$tmp/gh-output"
+  expect_true "a module: tests=some" grep -qx 'tests=some' "$tmp/gh-output"
+  expect_exit "--run adds the selected tests to the command" 0 sel --run -- echo RAN
+  expect_out "the command gets the test path" "RAN tests/test_core.py"
+  expect_exit "--run: pytest exit 5 (no tests collected) passes" 0 sel --run -- sh -c 'exit 5'
+  expect_exit "--run: a test failure fails" 3 sel --run -- sh -c 'exit 3'
+  expect_exit "--run needs a command" 2 sel --run --
+  reset_py
+
+  # A pytest plugin that collects tests from docs: give pytest the directory.
+  printf '\n[project]\nname = "p"\ndependencies = ["sybil"]\n' >>"$P/pyproject.toml"
+  quiet git -C "$P" commit -qam "sybil"
+  quiet git -C "$P" push origin main
+  selects "a docs plugin: a doc in a directory gives the directory" \
+    'echo more >>docs/guide.md' "docs"
+  selects "a docs plugin: a doc at the top gives ALL" \
+    'echo more >>README.md; sed -i.bak "s/README.md/x.md/" pyproject.toml; rm pyproject.toml.bak; git commit -qam glob; git push -q origin HEAD:main; echo more >>README.md' "ALL"
+fi
+
+# -----------------------------------------------------------------------------
 printf '\n%d passed, %d failed\n' "$passed" "$failed"
 [ "$failed" -eq 0 ]

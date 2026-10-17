@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Take a finished task branch to an open pull request - scope check, full checks through nix develop, commit message approval, SSH push, gh pr create with the project token, and the CI result from the Actions API. Use when the work on a branch is ready for review.
+description: Take a finished task branch to an open pull request - scope check, the checks through nix develop, commit message approval, SSH push, gh pr create with the project token, and the CI result from the Actions API. Use when the work on a branch is ready for review.
 ---
 
 # Ship a branch
@@ -21,11 +21,15 @@ branch (normally `main`).
 2. **Review the diffs from sub-agents.** Read each sub-agent diff yourself
    before you run the checks (see the `parallel-agents` skill).
 
-3. **Run all the checks.** If the project has `scripts/check`, run
+3. **Run the checks.** If the project has `scripts/check`, run
    `nix develop --command scripts/check` in the worktree. If not, run the
-   check command from `CLAUDE.md`. All checks must pass. If one fails,
-   correct the problem and run the checks again. Do not ship a failing
-   branch.
+   check command from `CLAUDE.md`. If `scripts/check` accepts
+   `--changed-since` (`grep -q -- --changed-since scripts/check`), run
+   `nix develop --command scripts/check --changed-since origin/<default>`:
+   all the lint and type checks, and only the tests that the change can
+   affect, as CI does for the PR. The default branch runs all the tests after
+   the merge. All checks must pass. If one fails, correct the problem and run
+   the checks again. Do not ship a failing branch.
 
 4. **Get approval.** Write the commit message in the repository's style (see
    `git log --oneline -15`; usually `<type>: <summary>`). In the body, tell
